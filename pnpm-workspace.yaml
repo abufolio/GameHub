@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  bcrypt: true
+  esbuild: true
+  workerd: true
+  prisma: true
+  "@prisma/engines": true

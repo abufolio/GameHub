@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  PLAYER
+  ORGANIZER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum GameStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique @db.VarChar(30)
+  email        String     @unique @db.VarChar(255)
+  passwordHash String
+  avatarUrl    String?
+  bio          String?    @db.Text
+  role         UserRole   @default(PLAYER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  teamMemberships TeamMember[]
+
+
+  @@index([status])
+  @@index([role])
+  @@map("users")
+}
+
+model Game {
+  id          String     @id @default(cuid())
+  name        String     @unique @db.VarChar(100)
+  slug        String     @unique @db.VarChar(120)
+  description String?    @db.Text
+  logoUrl     String?
+  bannerUrl   String?
+  maxTeamSize Int
+  status      GameStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tournaments Tournament[]
+  matches Match[]
+
+  @@index([status])
+  @@map("games")
+}
+
+
+enum TeamMemberRole {
+  OWNER
+  CAPTAIN
+  PLAYER
+  SUBSTITUTE
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(120)
+  logoUrl     String?
+  description String?  @db.Text
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tournamentTeams TournamentTeam[]
+
+  members TeamMember[]
+  matchTeams MatchTeam[]
+
+  @@index([ownerId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  teamId   String
+  userId   String
+  role     TeamMemberRole @default(PLAYER)
+  joinedAt DateTime       @default(now())
+  leftAt   DateTime?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
+  @@map("team_members")
+}
+
+enum TournamentFormat {
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+  ROUND_ROBIN
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION
+  UPCOMING
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentTeamStatus {
+  REGISTERED
+  ACTIVE
+  ELIMINATED
+  WITHDRAWN
+}
+
+model Tournament {
+  id                  String            @id @default(cuid())
+  gameId              String
+  organizerId         String
+  name                String            @db.VarChar(150)
+  slug                String            @unique @db.VarChar(180)
+  description         String?           @db.Text
+  bannerUrl           String?
+  format              TournamentFormat  @default(SINGLE_ELIMINATION)
+  status              TournamentStatus  @default(DRAFT)
+  maxTeams            Int
+  startAt             DateTime
+  endAt               DateTime?
+  registrationStartAt DateTime
+  registrationEndAt   DateTime
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  game        Game             @relation(fields: [gameId], references: [id])
+  teams       TournamentTeam[]
+  matches     Match[]
+
+  @@index([gameId])
+  @@index([organizerId])
+  @@index([status])
+  @@index([startAt])
+  @@map("tournaments")
+}
+
+model TournamentTeam {
+  id           String               @id @default(cuid())
+  tournamentId String
+  teamId       String
+  seed         Int?
+  status       TournamentTeamStatus @default(REGISTERED)
+  registeredAt DateTime             @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team       Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, teamId])
+  @@index([teamId])
+  @@index([tournamentId])
+  @@map("tournament_teams")
+}
+
+enum MatchStatus {
+  SCHEDULED
+  READY
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum MatchTeamResult {
+  WIN
+  LOSS
+  DRAW
+  PENDING
+}
+
+model Match {
+  id              String      @id @default(cuid())
+  tournamentId    String
+  gameId          String
+  round           Int
+  bracketPosition Int
+  status          MatchStatus @default(SCHEDULED)
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  winnerId        String?
+  createdAt       DateTime    @default(now())
+
+  tournament Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  game       Game        @relation(fields: [gameId], references: [id])
+  teams      MatchTeam[]
+
+  @@unique([tournamentId, round, bracketPosition])
+  @@index([tournamentId])
+  @@index([gameId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("matches")
+}
+
+model MatchTeam {
+  id      String          @id @default(cuid())
+  matchId String
+  teamId  String
+  score   Int             @default(0)
+  result  MatchTeamResult @default(PENDING)
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [teamId], references: [id])
+
+  @@unique([matchId, teamId])
+  @@index([teamId])
+  @@map("match_teams")
+}
